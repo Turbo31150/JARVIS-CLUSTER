@@ -1,517 +1,569 @@
+# JARVIS Cluster — Distributed Multi-GPU AI Orchestration
+
+> **EN** | [FR](#version-française)
+>
+> ![Python](https://img.shields.io/badge/python-3.11+-green)
+> ![GPUs](https://img.shields.io/badge/GPUs-5x_NVIDIA-76b900)
+> ![Docker](https://img.shields.io/badge/docker-10_containers-blue)
+> ![Nodes](https://img.shields.io/badge/nodes-3_machines-orange)
+>
+> Multi-node, multi-GPU distributed AI orchestration system. 9-step dispatch pipeline, 6-axis quality gates, multi-model consensus, cascade failover, auto-improvement, and GPU thermal monitoring.
+>
+> **Main node**: M1 "La Creatrice" — AMD Ryzen 7 5700X3D | 5 GPUs | 40GB VRAM | Ubuntu 24.04
+>
+> ---
+>
+> ## Table of Contents
+>
+> 1. [Architecture](#architecture)
+> 2. 2. [Cluster Nodes](#cluster-nodes)
+>    3. 3. [Dispatch Pipeline (9 steps)](#dispatch-pipeline)
+>       4. 4. [Quality Gates (6 axes)](#quality-gates)
+>          5. 5. [Failover Cascade](#failover-cascade)
+>             6. 6. [Multi-Model Consensus](#multi-model-consensus)
+>                7. 7. [Auto-Improvement](#auto-improvement)
+>                   8. 8. [Docker Containers (10)](#docker-containers)
+>                      9. 9. [Systemd Timers (5)](#systemd-timers)
+>                         10. 10. [Routing Matrix (17 domains)](#routing-matrix)
+>                             11. 11. [Installation](#installation)
+>                                 12. 12. [jarvis-ctl Commands](#jarvis-ctl-commands)
+>                                     13. 13. [GPU Thermal Monitoring](#gpu-thermal-monitoring)
+>                                         14. 14. [Troubleshooting](#troubleshooting)
+>                                             15. 15. [Version Française](#version-française)
+>                                                
+>                                                 16. ---
+>                                                
+>                                                 17. ## Architecture
+>                                                
+>                                                 18. ```
+> +=====================================================================+
+> |                        JARVIS CLUSTER                               |
+> |                                                                     |
+> |  +---------------------------------------------------------------+  |
+> |  |                    DISPATCH ENGINE                            |  |
+> |  |  health > classify > memory > optimize > route               |  |
+> |  |  > dispatch > quality gates > feedback > events              |  |
+> |  +-----------------------------+---------------------------------+  |
+> |                                |                                    |
+> |              +-----------------+----------------+                   |
+> |              |                 |                |                   |
+> |              v                 v                v                   |
+> |        +-----------+   +-----------+   +-----------+               |
+> |        | M1 (local)|   | M2 (LAN)  |   | M3 (LAN)  |              |
+> |        | 5 GPUs    |   | reasoning |   | fallback  |               |
+> |        | 40GB VRAM |   |           |   |           |               |
+> |        +-----------+   +-----------+   +-----------+               |
+> |              |                 |                |                   |
+> |              v                 v                v                   |
+> |        +-----------+   +-----------+   +-----------+               |
+> |        |   OL1     |   |  GEMINI   |   |  CLAUDE   |               |
+> |        | (Ollama)  |   |  (API)    |   |  (API)    |               |
+> |        +-----------+   +-----------+   +-----------+               |
+> |                                                                     |
+> |  CIRCUIT BREAKER: 3 failures → skip 60s → auto-retry              |
+> |  LOAD BALANCER: adaptive scoring (latency + quality)               |
+> +=====================================================================+
+> ```
+>
+> ---
+>
+> ## Cluster Nodes
+>
+> | Node | Address | Role | VRAM |
+> |------|---------|------|------|
+> | **M1 "La Creatrice"** | `127.0.0.1:1234` | Deep analysis — 5 GPUs | 40 GB |
+> | **M2** | `192.168.1.26:1234` | Fast inference | 24 GB |
+> | **M3** | `192.168.1.113:1234` | General inference / fallback | 8 GB |
+> | **OL1** | `127.0.0.1:11434` | Cloud inference (Ollama) | Cloud |
+>
+> ### M1 Specifications
+>
+> | Component | Detail |
+> |-----------|--------|
+> | CPU | AMD Ryzen 7 5700X3D — 16 threads |
+> | RAM | 46 GB DDR4 + 12 GB ZRAM |
+> | GPU 0 | NVIDIA RTX 3080 — 10 GB GDDR6X |
+> | GPU 1 | NVIDIA RTX 2060 — 12 GB GDDR6 |
+> | GPU 2-4 | 3x NVIDIA GTX 1660 SUPER — 6 GB each |
+> | VRAM Total | 40 GB |
+>
+> ---
+>
+> ## Dispatch Pipeline
+>
+> Each request traverses a complete 9-step sequential pipeline:
+>
+> ```
+> [1. HEALTH CHECK]    → Verify all nodes (latency, GPU temp, availability)
+>         |
+> [2. CLASSIFY]        → Domain classification (17 routing domains)
+>         |
+> [3. MEMORY ENRICH]   → Context enrichment from episodic memory
+>         |
+> [4. PROMPT OPTIMIZE] → Prompt optimization before sending
+>         |
+> [5. ROUTE]           → Optimal node selection (score + latency + specialization)
+>         |
+> [6. DISPATCH]        → Send to selected node (with timeout + retry)
+>         |
+> [7. QUALITY GATES]   → Validate on 6 axes
+>         |
+> [8. FEEDBACK]        → Scoring, learning, adjustment loop
+>         |
+> [9. EVENT STREAM]    → Broadcast on event bus (WebSocket, logs, metrics)
+> ```
+>
+> ---
+>
+> ## Quality Gates
+>
+> Each response is evaluated on 6 axes before validation:
+>
+> | Axis | Description |
+> |------|-------------|
+> | **Length** | Response respects expected size |
+> | **Structure** | Coherent format (markdown, lists, code) |
+> | **Relevance** | Alignment with original request |
+> | **Confidence** | Model confidence score |
+> | **Latency** | Response time within acceptable thresholds |
+> | **Hallucination** | Detection of fabricated or incoherent content |
+>
+> Failed quality gates trigger automatic re-dispatch to another node.
+>
+> ---
+>
+> ## Failover Cascade
+>
+> ```
+> M1 --fail--> M2 --fail--> OL1 --fail--> M3 --fail--> GEMINI --fail--> CLAUDE
+> ```
+>
+> Circuit breaker per node:
+> - 3 consecutive failures → node paused for 60 seconds
+> - After delay → node automatically restored
+> - Each node has its own independent counter
+>
+> ---
+>
+> ## Multi-Model Consensus
+
+For critical requests, the system uses weighted voting across multiple models:
+
 ```
-     ██╗ █████╗ ██████╗ ██╗   ██╗██╗███████╗
-     ██║██╔══██╗██╔══██╗██║   ██║██║██╔════╝
-     ██║███████║██████╔╝██║   ██║██║███████╗
-██   ██║██╔══██║██╔══██╗╚██╗ ██╔╝██║╚════██║
-╚█████╔╝██║  ██║██║  ██║ ╚████╔╝ ██║███████║
- ╚════╝ ╚═╝  ╚═╝╚═╝  ╚═╝  ╚═══╝  ╚═╝╚══════╝
-           C  L  U  S  T  E  R
-    Orchestration Multi-GPU Distribuee
+M1 + M2 + OL1 (+ GEMINI + CLAUDE for consensus pattern)
+    |       |       |
+    v       v       v
+    +-------+-------+
+    | CONSENSUS ENGINE |
+    | Weighted vote    |
+    | → Consolidated   |
+    +------------------+
 ```
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Plateforme-Linux-blue?style=for-the-badge&logo=linux&logoColor=white" />
-  <img src="https://img.shields.io/badge/GPU_VRAM-40_GB-green?style=for-the-badge&logo=nvidia&logoColor=white" />
-  <img src="https://img.shields.io/badge/Noeuds-4-orange?style=for-the-badge&logo=serverless&logoColor=white" />
-  <img src="https://img.shields.io/badge/Containers-10-blueviolet?style=for-the-badge&logo=docker&logoColor=white" />
-  <img src="https://img.shields.io/badge/Pipeline-9_etapes-red?style=for-the-badge&logo=fastapi&logoColor=white" />
-  <img src="https://img.shields.io/badge/Licence-Privee-lightgrey?style=for-the-badge" />
-</p>
-
-<p align="center">
-  <strong>Systeme d'orchestration IA distribue multi-GPU et multi-noeuds.<br/>
-  Dispatch engine 9 etapes, quality gates 6 axes, consensus multi-modele,<br/>
-  failover en cascade, auto-amelioration et monitoring thermique GPU.</strong>
-</p>
+Each node contributes with a weight proportional to its historical reliability score.
 
 ---
 
-## Table des matieres
+## Auto-Improvement
 
-- [Presentation](#presentation)
-- [Architecture du cluster](#architecture-du-cluster)
-- [Noeuds du cluster](#noeuds-du-cluster)
-- [Pipeline de dispatch (9 etapes)](#pipeline-de-dispatch-9-etapes)
-- [Quality Gates (6 axes)](#quality-gates-6-axes)
-- [Cascade de failover](#cascade-de-failover)
-- [Consensus multi-modele](#consensus-multi-modele)
-- [Auto-amelioration](#auto-amelioration)
-- [Containers Docker (10)](#containers-docker-10)
-- [Reseau Docker](#reseau-docker)
-- [Timers systemd (5)](#timers-systemd-5)
-- [Matrice de routage (17 domaines)](#matrice-de-routage-17-domaines)
-- [Arborescence du depot](#arborescence-du-depot)
-- [Installation](#installation)
-- [Commandes jarvis-ctl](#commandes-jarvis-ctl)
-- [Monitoring thermique GPU](#monitoring-thermique-gpu)
-- [Depannage](#depannage)
-- [Licence](#licence)
-
----
-
-## Presentation
-
-**JARVIS Cluster** est le systeme d'orchestration IA distribue multi-GPU et multi-noeuds. Ce depot contient l'infrastructure cluster, le moteur de dispatch, le vote par consensus et l'orchestration multi-modele.
-
-Le systeme repartit intelligemment les requetes sur un parc de GPUs heterogenes en tenant compte de la charge, de la latence, de la temperature et de la specialisation de chaque noeud — avec failover automatique et circuit breaker integres.
-
----
-
-## Architecture du cluster
-
-```
-+=====================================================================+
-|                        JARVIS CLUSTER                               |
-|                                                                     |
-|  +---------------------------------------------------------------+  |
-|  |                    DISPATCH ENGINE                             |  |
-|  |  health --> classify --> memory --> optimize --> route          |  |
-|  |       --> dispatch --> quality gates --> feedback --> events    |  |
-|  +-----------------------------+---------------------------------+  |
-|                                |                                    |
-|            +-------------------+-------------------+                |
-|            |                   |                   |                |
-|            v                   v                   v                |
-|     +-----------+      +-----------+       +-----------+           |
-|     | M1 (local)|      | M2 (LAN)  |       | M3 (LAN)  |          |
-|     | 5 GPUs    |      | fast      |       | general   |          |
-|     | 40GB VRAM |      | inference |       | inference |          |
-|     | deep      |      |           |       | reasoning |          |
-|     | analysis  |      |           |       | fallback  |          |
-|     +-----------+      +-----------+       +-----------+           |
-|            |                                                        |
-|            v                                                        |
-|     +-----------+      +-----------+       +-----------+           |
-|     | OL1       |      | GEMINI    |       | CLAUDE    |           |
-|     | (Ollama)  |      | (API)     |       | (API)     |           |
-|     | cloud     |      | fallback  |       | fallback  |           |
-|     | inference |      |           |       |           |           |
-|     +-----------+      +-----------+       +-----------+           |
-|                                                                     |
-|  +---------------------------------------------------------------+  |
-|  |            CIRCUIT BREAKER (par noeud)                         |  |
-|  |          3 echecs --> skip 60s --> retry auto                  |  |
-|  +---------------------------------------------------------------+  |
-|                                                                     |
-|  +---------------------------------------------------------------+  |
-|  |         LOAD BALANCER (scoring par noeud)                      |  |
-|  |       Routage adaptatif : latence + score qualite              |  |
-|  +---------------------------------------------------------------+  |
-+=====================================================================+
-```
-
----
-
-## Noeuds du cluster
-
-| Noeud | Adresse | Role | GPUs | VRAM |
-|-------|---------|------|------|------|
-| **M1** "La Creatrice" | `127.0.0.1:1234` | `deep_analysis` | RTX 3080 (10GB), RTX 2060 (12GB), 3x GTX 1660 SUPER (6GB) | **40 GB** |
-| **M2** | `192.168.1.26:1234` | `fast_inference` | — | — |
-| **M3** | `192.168.1.113:1234` | `general_inference` (reasoning fallback) | — | — |
-| **OL1** | `127.0.0.1:11434` | `cloud_inference` (Ollama) | — | — |
-
-### Specifications M1
-
-| Composant | Detail |
-|-----------|--------|
-| CPU | AMD Ryzen 7 5700X3D — 16 threads |
-| RAM | 46 GB DDR4 + 12 GB ZRAM |
-| GPU 0 | NVIDIA RTX 3080 — 10 GB GDDR6X |
-| GPU 1 | NVIDIA RTX 2060 — 12 GB GDDR6 |
-| GPU 2 | NVIDIA GTX 1660 SUPER — 6 GB GDDR6 |
-| GPU 3 | NVIDIA GTX 1660 SUPER — 6 GB GDDR6 |
-| GPU 4 | NVIDIA GTX 1660 SUPER — 6 GB GDDR6 |
-| **VRAM totale** | **40 GB** |
-
----
-
-## Pipeline de dispatch (9 etapes)
-
-Chaque requete traverse un pipeline complet en 9 etapes sequentielles :
-
-```
-  +===============+
-  | 1. HEALTH     |  Verification sante de tous les noeuds
-  |    CHECK      |  (latence, GPU temp, disponibilite)
-  +======+========+
-         |
-         v
-  +===============+
-  | 2. CLASSIFY   |  Classification du domaine de la requete
-  |               |  (17 domaines de routage)
-  +======+========+
-         |
-         v
-  +===============+
-  | 3. MEMORY     |  Enrichissement via memoire contextuelle
-  |  ENRICHMENT   |  (historique, patterns, preferences)
-  +======+========+
-         |
-         v
-  +===============+
-  | 4. PROMPT     |  Optimisation du prompt avant envoi
-  |  OPTIMIZE     |  (reformulation, ajout contexte)
-  +======+========+
-         |
-         v
-  +===============+
-  | 5. ROUTE      |  Selection du noeud optimal
-  |               |  (score, latence, specialisation)
-  +======+========+
-         |
-         v
-  +===============+
-  | 6. DISPATCH   |  Envoi au noeud selectionne
-  |               |  (avec timeout et retry)
-  +======+========+
-         |
-         v
-  +===============+
-  | 7. QUALITY    |  Validation sur 6 axes
-  |    GATES      |  (longueur, structure, pertinence,
-  |               |   confiance, latence, hallucination)
-  +======+========+
-         |
-         v
-  +===============+
-  | 8. FEEDBACK   |  Boucle de retour
-  |               |  (scoring, apprentissage, ajustement)
-  +======+========+
-         |
-         v
-  +===============+
-  | 9. EVENT      |  Diffusion sur le bus d'evenements
-  |    STREAM     |  (WebSocket, logs, metriques)
-  +===============+
-```
-
----
-
-## Quality Gates (6 axes)
-
-Chaque reponse est evaluee sur 6 axes avant d'etre validee :
-
-| Axe | Description |
-|-----|-------------|
-| **Longueur** | La reponse respecte la taille attendue |
-| **Structure** | Format coherent (markdown, listes, code) |
-| **Pertinence** | Adequation avec la requete originale |
-| **Confiance** | Score de confiance du modele |
-| **Latence** | Temps de reponse dans les seuils acceptables |
-| **Hallucination** | Detection de contenu fabrique ou incoherent |
-
-Si une reponse echoue aux quality gates, le dispatch engine relance la requete vers un autre noeud via la cascade de failover.
-
----
-
-## Cascade de failover
-
-En cas d'echec ou de quality gate non satisfait, les requetes suivent cette cascade :
-
-```
-  M1 --fail--> M2 --fail--> OL1 --fail--> M3 --fail--> GEMINI --fail--> CLAUDE
-  |            |             |             |             |                |
-  deep         fast          cloud         general       API              API
-  analysis     inference     inference     inference     fallback         fallback
-```
-
-Le **circuit breaker** protege chaque noeud individuellement :
-- **3 echecs consecutifs** : le noeud est mis en pause pendant **60 secondes**
-- Apres le delai, le noeud est automatiquement remis en service
-- Chaque noeud a son propre compteur independant
-
----
-
-## Consensus multi-modele
-
-Pour les requetes critiques, le systeme utilise un **vote pondere** entre plusieurs modeles :
-
-```
-  +---------+     +---------+     +---------+
-  |   M1    |     |   M2    |     |   OL1   |
-  |         |     |         |     |         |
-  +----+----+     +----+----+     +----+----+
-       |               |               |
-       v               v               v
-  +------------------------------------------+
-  |         CONSENSUS ENGINE                  |
-  |   Vote pondere M1 + M2 + OL1             |
-  |   --> Reponse consolidee                  |
-  +------------------------------------------+
-```
-
-Chaque noeud contribue avec un poids proportionnel a son score de fiabilite historique.
-
----
-
-## Auto-amelioration
-
-### 5 types d'auto-actions
-
-Le systeme s'ameliore en continu via 5 mecanismes automatiques :
+### 5 Auto-Action Types
 
 | Action | Description |
 |--------|-------------|
-| `route_shift` | Deplacement du routage vers un noeud plus performant |
-| `temp_adjust` | Ajustement de la temperature du modele |
-| `tokens_adjust` | Modification du nombre de tokens max |
-| `gate_tune` | Affinage des seuils des quality gates |
-| `prompt_enhance` | Amelioration automatique des prompts |
+| `route_shift` | Move routing to better-performing node |
+| `temp_adjust` | Adjust model temperature |
+| `tokens_adjust` | Modify max token count |
+| `gate_tune` | Fine-tune quality gate thresholds |
+| `prompt_enhance` | Automatic prompt improvement |
 
-### Moteur de reflexion (5 axes)
-
-Le systeme evalue sa propre performance sur 5 axes :
-
-| Axe | Ce qu'il mesure |
-|-----|-----------------|
-| **Qualite** | Score moyen des quality gates |
-| **Performance** | Latence et debit |
-| **Fiabilite** | Taux de succes, uptime |
-| **Efficience** | Utilisation des ressources GPU/RAM |
-| **Croissance** | Evolution des patterns et apprentissage |
-
-### Evolution des patterns
-
-Le systeme detecte automatiquement les lacunes dans ses connaissances et cree de nouveaux patterns pour y repondre.
+### Self-Reflection (5 axes)
+Quality · Performance · Reliability · Efficiency · Growth
 
 ---
 
-## Containers Docker (10)
+## Docker Containers
 
-| # | Container | Role | Port |
+| # | Container | Port | Role |
 |---|-----------|------|------|
-| 1 | `jarvis-ws` | Hub WebSocket FastAPI | `9742` |
-| 2 | `vocal-engine` | Wake word + pipeline STT | — |
-| 3 | `pipeline-engine` | Moteur de dispatch | — |
-| 4 | `domino` | Actions apprises | — |
-| 5 | `openclaw-node` | Gateway | `28789` |
-| 6 | `cowork-engine` | 477 scripts autonomes | — |
-| 7 | `cowork-dispatcher` | Routeur cowork | — |
-| 8 | `vocal-whisper` | STT GPU (Whisper) | `18001` |
-| 9 | `domino-mcp` | Bridge SSE | `8901` |
-| 10 | `jarvis-telegram` | Bot Telegram distant | — |
+| 1 | `jarvis-ws` | 9742 | FastAPI WebSocket Hub |
+| 2 | `vocal-engine` | — | Wake word + STT pipeline |
+| 3 | `pipeline-engine` | — | Dispatch engine |
+| 4 | `domino` | — | 444 learned actions |
+| 5 | `openclaw-node` | 28789 | Gateway |
+| 6 | `cowork-engine` | — | 477 autonomous scripts |
+| 7 | `cowork-dispatcher` | — | COWORK router |
+| 8 | `vocal-whisper` | 18001 | GPU STT (Whisper) |
+| 9 | `domino-mcp` | 8901 | SSE Bridge |
+| 10 | `jarvis-telegram` | — | Remote Telegram Bot |
 
 ---
 
-## Reseau Docker
+## Systemd Timers
 
-```
-+======================== jarvis-network ==========================+
-|                                                                   |
-|  +--------------+   +--------------+   +--------------+          |
-|  |  jarvis-ws   |<--|  pipeline-   |-->|  vocal-      |          |
-|  |  :9742       |   |  engine      |   |  engine      |          |
-|  +------+-------+   +------+-------+   +--------------+          |
-|         |                  |                                      |
-|         |           +------+-------+   +--------------+          |
-|         |           |   domino     |   |  vocal-      |          |
-|         |           |              |   |  whisper     |          |
-|         |           +--------------+   |  :18001      |          |
-|         |                              +--------------+          |
-|         |                                                        |
-|  +------+-------+   +--------------+   +--------------+          |
-|  |  openclaw-   |   |  cowork-     |-->|  cowork-     |          |
-|  |  node        |   |  dispatcher  |   |  engine      |          |
-|  |  :28789      |   +--------------+   +--------------+          |
-|  +--------------+                                                |
-|                                                                   |
-|  +--------------+   +--------------+                              |
-|  |  domino-mcp  |   |  jarvis-     |                              |
-|  |  :8901       |   |  telegram    |                              |
-|  +--------------+   +--------------+                              |
-|                                                                   |
-+=================================================================+
-```
-
----
-
-## Timers systemd (5)
-
-| Timer | Frequence | Role |
+| Timer | Frequency | Role |
 |-------|-----------|------|
-| `jarvis-health` | Toutes les 15 min | Verification sante du cluster |
-| `jarvis-backup` | Quotidien | Sauvegarde des donnees et configs |
-| `jarvis-thermal` | Toutes les 5 min | Surveillance thermique GPU |
-| `jarvis-log-rotate` | Hebdomadaire | Rotation des logs |
-| `jarvis-pipeline-check` | Toutes les 10 min | Verification du pipeline de dispatch |
+| `jarvis-health` | Every 15 min | Cluster health check |
+| `jarvis-backup` | Daily | Data + config backup |
+| `jarvis-thermal` | Every 5 min | GPU thermal monitoring |
+| `jarvis-log-rotate` | Weekly | Log rotation |
+| `jarvis-pipeline-check` | Every 10 min | Pipeline dispatch check |
 
 ---
 
-## Matrice de routage (17 domaines)
+## Routing Matrix
 
-Le routeur adaptatif gere **17 domaines** pour diriger chaque requete vers le noeud le plus adapte, en tenant compte de :
+17 domains managed by the adaptive router — each request routed based on: node specialization, measured latency, historical quality score, current GPU load, GPU temperature.
 
-- La specialisation du noeud pour le domaine
-- La latence mesuree
-- Le score de qualite historique
-- La charge GPU actuelle
-- La temperature GPU
-
----
-
-## Arborescence du depot
-
-```
-JARVIS-CLUSTER/
-|-- src/                    # Modules source
-|-- canvas/                 # Interface UI avec proxy
-|-- cowork/                 # Scripts autonomes
-|-- docker/                 # Deploiement Docker
-|-- electron/               # Application desktop
-|-- scripts/                # Utilitaires cluster
-|-- data/                   # Bases de donnees
-|-- n8n_workflows/          # Automatisation workflows
-|-- plugins/                # Plugins Claude Code
-|-- projects/               # Deploiement Linux
-|   +-- linux/
-|       |-- install.sh          # Script d'installation
-|       |-- docker-compose.yml  # Orchestration containers
-|       +-- jarvis-ctl.sh       # Controle du cluster
-|-- main.py                 # Point d'entree
-|-- requirements.txt        # Dependances Python
-|-- pyproject.toml          # Configuration projet
-+-- README.md               # Ce fichier
-```
+| Domain | Primary Nodes |
+|--------|--------------|
+| `code_generation` | M1, GEMINI, M2 |
+| `reasoning` | M1, M2, OL1 |
+| `trading_signal` | OL1, M1, GEMINI |
+| `vision` | GEMINI |
+| `consensus` | M1, M2, OL1, M3, GEMINI, CLAUDE |
+| `web_research` | GEMINI, OL1, M1 |
+| `architecture` | GEMINI, CLAUDE, M1 |
 
 ---
 
 ## Installation
 
-### Prerequis
+### Prerequisites
+- Linux (tested on Ubuntu/Arch)
+- - Docker + Docker Compose
+  - - NVIDIA drivers + NVIDIA Container Toolkit
+    - - Python 3.11+
+      - - At least 1 NVIDIA GPU
+       
+        - ### Quick Start
+       
+        - ```bash
+          git clone https://github.com/Turbo31150/JARVIS-CLUSTER.git
+          cd JARVIS-CLUSTER
 
-- Linux (teste sur Ubuntu/Arch)
-- Docker + Docker Compose
-- NVIDIA drivers + NVIDIA Container Toolkit
-- Python 3.11+
-- Au moins 1 GPU NVIDIA
+          # Full installation
+          bash projects/linux/install.sh
 
-### Installation rapide
+          # Docker deployment
+          cd projects/linux
+          docker compose up -d
 
-```bash
-# Cloner le depot
-git clone https://github.com/Turbo31150/JARVIS-CLUSTER.git
-cd JARVIS-CLUSTER
+          # Verify status
+          docker compose ps
+          ```
 
-# Lancer l'installation
-bash projects/linux/install.sh
-```
+          ---
 
-### Deploiement Docker
+          ## jarvis-ctl Commands
 
-```bash
-# Lancer tous les containers
-cd projects/linux
-docker compose up -d
+          ```bash
+          bash projects/linux/jarvis-ctl.sh start    # Start all services
+          bash projects/linux/jarvis-ctl.sh stop     # Stop all services
+          bash projects/linux/jarvis-ctl.sh restart  # Restart
+          bash projects/linux/jarvis-ctl.sh status   # Cluster state
+          bash projects/linux/jarvis-ctl.sh logs     # View logs
+          bash projects/linux/jarvis-ctl.sh health   # Full health check
+          ```
 
-# Verifier le statut
-docker compose ps
-```
+          ---
 
-### Controle avec jarvis-ctl
+          ## GPU Thermal Monitoring
 
-```bash
-# Demarrer le cluster
-bash projects/linux/jarvis-ctl.sh start
+          | Temperature | Status | Action |
+          |-------------|--------|--------|
+          | < 75°C | Normal | Standard operation |
+          | 75-85°C | Warning | Alert, load reduction |
+          | > 85°C | Critical | Auto-reroute to cooler node |
 
-# Statut du cluster
-bash projects/linux/jarvis-ctl.sh status
+          The `jarvis-thermal` timer checks every 5 minutes. On critical overheat, dispatch engine automatically reroutes to a cooler node.
 
-# Arreter le cluster
-bash projects/linux/jarvis-ctl.sh stop
-```
+          ---
 
----
+          ## Troubleshooting
 
-## Commandes jarvis-ctl
+          | Symptom | Solution |
+          |---------|----------|
+          | Node not responding | `curl -s http://<addr>:<port>/health` then check circuit breaker |
+          | GPU temperature too high | `nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader` — system reroutes above 85°C |
+          | Container not starting | `docker compose logs <container>` |
+          | Pipeline blocked | `bash jarvis-ctl.sh restart` — timer checks every 10 min |
+          | OL1 offline | `ollama serve` |
 
-```bash
-jarvis-ctl.sh start       # Demarrer tous les services
-jarvis-ctl.sh stop        # Arreter tous les services
-jarvis-ctl.sh restart     # Redemarrer
-jarvis-ctl.sh status      # Etat du cluster
-jarvis-ctl.sh logs        # Voir les logs
-jarvis-ctl.sh health      # Check sante complet
-```
+          ---
 
----
+          ## Related Repos
 
-## Monitoring thermique GPU
+          | Repo | Description |
+          |------|-------------|
+          | [jarvis-linux](https://github.com/Turbo31150/jarvis-linux) | Main repo — full OS deployment |
+          | [turbo](https://github.com/Turbo31150/turbo) | JARVIS Etoile v12.4 — 602 MCP handlers |
+          | [jarvis-cowork](https://github.com/Turbo31150/jarvis-cowork) | 249 autonomous development scripts |
 
-Le systeme surveille en continu la temperature des 5 GPUs de M1 :
+          ---
 
-| Seuil | Temperature | Action |
-|-------|-------------|--------|
-| Normal | < 75 C | Operation normale |
-| Warning | >= 75 C | Alerte, reduction de charge |
-| Critique | >= 85 C | Reroutage automatique vers un autre noeud |
+          *Author: Turbo31150 | Platform: Linux x86_64 | Architecture: Distributed Multi-GPU AI | March 2026*
 
-Le timer `jarvis-thermal` verifie toutes les 5 minutes. En cas de surchauffe critique, le dispatch engine reroute automatiquement les requetes vers un noeud plus froid.
+          ---
+          ---
 
----
+          # Version Française
 
-## Depannage
-
-### Un noeud ne repond pas
-
-```bash
-# Verifier la connectivite
-curl -s http://<adresse>:<port>/health
-
-# Verifier le circuit breaker
-bash projects/linux/jarvis-ctl.sh status
-```
-
-Le circuit breaker met automatiquement le noeud en pause apres 3 echecs et reessaie apres 60 secondes.
-
-### Temperature GPU trop elevee
-
-```bash
-# Verifier les temperatures
-nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader
-
-# Le systeme reroute automatiquement au-dessus de 85 C
-```
-
-### Container Docker qui ne demarre pas
-
-```bash
-# Voir les logs du container
-docker compose -f projects/linux/docker-compose.yml logs <container>
-
-# Redemarrer un container specifique
-docker compose -f projects/linux/docker-compose.yml restart <container>
-```
-
-### Pipeline bloque
-
-```bash
-# Le timer jarvis-pipeline-check verifie toutes les 10 min
-# Relancer manuellement :
-bash projects/linux/jarvis-ctl.sh restart
-```
-
-### OL1 (Ollama) hors ligne
-
-```bash
-# Redemarrer Ollama
-ollama serve
-
-# Verifier le statut
-curl -s http://127.0.0.1:11434/api/tags
-```
-
----
-
-## Licence
-
-**Projet prive** — Tous droits reserves.
-
-Ce depot est un projet personnel. Aucune licence open source n'est accordee.
-
----
-
-<p align="center">
-  <strong>JARVIS Cluster</strong> — Orchestration IA distribuee multi-GPU<br/>
-  Concu et maintenu par <a href="https://github.com/Turbo31150">Turbo</a>
-</p>
+          > [EN](#jarvis-cluster--distributed-multi-gpu-ai-orchestration) | **FR**
+          >
+          > ![Python](https://img.shields.io/badge/python-3.11+-green)
+          > ![GPUs](https://img.shields.io/badge/GPUs-5x_NVIDIA-76b900)
+          > ![Docker](https://img.shields.io/badge/docker-10_conteneurs-blue)
+          > ![Noeuds](https://img.shields.io/badge/noeuds-3_machines-orange)
+          >
+          > Système d'orchestration IA distribué multi-GPU et multi-nœuds. Pipeline de dispatch 9 étapes, quality gates 6 axes, consensus multi-modèle, failover en cascade, auto-amélioration et monitoring thermique GPU.
+          >
+          > **Nœud principal** : M1 "La Creatrice" — AMD Ryzen 7 5700X3D | 5 GPUs | 40GB VRAM | Ubuntu 24.04
+          >
+          > ---
+          >
+          > ## Table des matières FR
+          >
+          > 1. [Architecture](#architecture-fr)
+          > 2. 2. [Nœuds du cluster](#nœuds-du-cluster)
+          >    3. 3. [Pipeline de dispatch (9 étapes)](#pipeline-de-dispatch)
+          >       4. 4. [Quality Gates (6 axes)](#quality-gates-fr)
+          >          5. 5. [Cascade de failover](#cascade-de-failover)
+          >             6. 6. [Consensus multi-modèle](#consensus-multi-modèle)
+          >                7. 7. [Auto-amélioration](#auto-amélioration)
+          >                   8. 8. [Conteneurs Docker (10)](#conteneurs-docker-fr)
+          >                      9. 9. [Timers systemd (5)](#timers-systemd)
+          >                         10. 10. [Matrice de routage (17 domaines)](#matrice-de-routage)
+          >                             11. 11. [Installation](#installation-fr)
+          >                                 12. 12. [Commandes jarvis-ctl](#commandes-jarvis-ctl)
+          >                                     13. 13. [Monitoring thermique GPU](#monitoring-thermique-gpu)
+          >                                         14. 14. [Dépannage](#dépannage)
+          >                                            
+          >                                             15. ---
+          >                                            
+          >                                             16. ## Architecture FR
+          >                                            
+          >                                             17. ```
+          > +=====================================================================+
+          > |                        JARVIS CLUSTER                               |
+          > |                                                                     |
+          > |  +---------------------------------------------------------------+  |
+          > |  |                    DISPATCH ENGINE                            |  |
+          > |  |  santé > classifier > mémoire > optimiser > router           |  |
+          > |  |  > dispatcher > quality gates > feedback > événements        |  |
+          > |  +-----------------------------+---------------------------------+  |
+          > |                                |                                    |
+          > |              +-----------------+----------------+                   |
+          > |              |                 |                |                   |
+          > |        M1 (local)         M2 (LAN)         M3 (LAN)                |
+          > |        5 GPUs 40GB        reasoning         fallback                |
+          > |              |                 |                |                   |
+          > |        OL1 (Ollama)       GEMINI (API)    CLAUDE (API)             |
+          > |                                                                     |
+          > |  CIRCUIT BREAKER: 3 échecs → pause 60s → retry auto               |
+          > |  LOAD BALANCER: scoring adaptatif (latence + qualité)              |
+          > +=====================================================================+
+          > ```
+          >
+          > ---
+          >
+          > ## Nœuds du cluster
+          >
+          > | Nœud | Adresse | Rôle | VRAM |
+          > |------|---------|------|------|
+          > | **M1 "La Creatrice"** | `127.0.0.1:1234` | Deep analysis — 5 GPUs | 40 GB |
+          > | **M2** | `192.168.1.26:1234` | Inference rapide | 24 GB |
+          > | **M3** | `192.168.1.113:1234` | Inference générale / fallback | 8 GB |
+          > | **OL1** | `127.0.0.1:11434` | Inference cloud (Ollama) | Cloud |
+          >
+          > ### Spécifications M1
+          >
+          > | Composant | Détail |
+          > |-----------|--------|
+          > | CPU | AMD Ryzen 7 5700X3D — 16 threads |
+          > | RAM | 46 GB DDR4 + 12 GB ZRAM |
+          > | GPU 0 | NVIDIA RTX 3080 — 10 GB GDDR6X |
+          > | GPU 1 | NVIDIA RTX 2060 — 12 GB GDDR6 |
+          > | GPU 2-4 | 3x NVIDIA GTX 1660 SUPER — 6 GB chacun |
+          > | VRAM Total | 40 GB |
+          >
+          > ---
+          >
+          > ## Pipeline de dispatch
+          >
+          > Chaque requête traverse un pipeline complet en 9 étapes séquentielles :
+          >
+          > ```
+          > [1. HEALTH CHECK]      → Vérification santé de tous les nœuds
+          > [2. CLASSIFIER]        → Classification du domaine (17 domaines)
+          > [3. MEMORY ENRICH]     → Enrichissement mémoire épisodique
+          > [4. PROMPT OPTIMIZE]   → Optimisation du prompt avant envoi
+          > [5. ROUTE]             → Sélection du nœud optimal
+          > [6. DISPATCH]          → Envoi avec timeout + retry
+          > [7. QUALITY GATES]     → Validation sur 6 axes
+          > [8. FEEDBACK]          → Boucle scoring, apprentissage, ajustement
+          > [9. EVENT STREAM]      → Diffusion bus d'événements (WS, logs, métriques)
+          > ```
+          >
+          > ---
+          >
+          > ## Quality Gates FR
+          >
+          > | Axe | Description |
+          > |-----|-------------|
+          > | **Longueur** | La réponse respecte la taille attendue |
+          > | **Structure** | Format cohérent (markdown, listes, code) |
+          > | **Pertinence** | Adéquation avec la requête originale |
+          > | **Confiance** | Score de confiance du modèle |
+          > | **Latence** | Temps de réponse dans les seuils acceptables |
+          > | **Hallucination** | Détection de contenu fabriqué ou incohérent |
+          >
+          > ---
+          >
+          > ## Cascade de failover
+          >
+          > ```
+          > M1 --échec--> M2 --échec--> OL1 --échec--> M3 --échec--> GEMINI --échec--> CLAUDE
+          > ```
+          >
+          > Circuit breaker par nœud : 3 échecs consécutifs → pause 60s → remise en service auto.
+          >
+          > ---
+          >
+          > ## Consensus multi-modèle
+          >
+          > Pour les requêtes critiques, vote pondéré entre plusieurs modèles. Chaque nœud contribue avec un poids proportionnel à son score de fiabilité historique.
+          >
+          > ---
+          >
+          > ## Auto-amélioration
+          >
+          > ### 5 types d'auto-actions
+          >
+          > | Action | Description |
+          > |--------|-------------|
+          > | `route_shift` | Déplacement du routage vers un nœud plus performant |
+          > | `temp_adjust` | Ajustement de la température du modèle |
+          > | `tokens_adjust` | Modification du nombre de tokens max |
+          > | `gate_tune` | Affinage des seuils des quality gates |
+          > | `prompt_enhance` | Amélioration automatique des prompts |
+          >
+          > ---
+          >
+          > ## Conteneurs Docker FR
+          >
+          > | # | Conteneur | Port | Rôle |
+          > |---|-----------|------|------|
+          > | 1 | `jarvis-ws` | 9742 | Hub WebSocket FastAPI |
+          > | 2 | `vocal-engine` | — | Wake word + pipeline STT |
+          > | 3 | `pipeline-engine` | — | Moteur de dispatch |
+          > | 4 | `domino` | — | 444 actions apprises |
+          > | 5 | `openclaw-node` | 28789 | Gateway |
+          > | 6 | `cowork-engine` | — | 477 scripts autonomes |
+          > | 7 | `cowork-dispatcher` | — | Routeur COWORK |
+          > | 8 | `vocal-whisper` | 18001 | STT GPU (Whisper) |
+          > | 9 | `domino-mcp` | 8901 | Bridge SSE |
+          > | 10 | `jarvis-telegram` | — | Bot Telegram distant |
+          >
+          > ---
+          >
+          > ## Timers systemd
+          >
+          > | Timer | Fréquence | Rôle |
+          > |-------|-----------|------|
+          > | `jarvis-health` | Toutes les 15 min | Vérification santé cluster |
+          > | `jarvis-backup` | Quotidien | Sauvegarde données + configs |
+          > | `jarvis-thermal` | Toutes les 5 min | Surveillance thermique GPU |
+          > | `jarvis-log-rotate` | Hebdomadaire | Rotation des logs |
+          > | `jarvis-pipeline-check` | Toutes les 10 min | Vérification pipeline dispatch |
+          >
+          > ---
+          >
+          > ## Matrice de routage
+          >
+          > 17 domaines — routage basé sur : spécialisation, latence mesurée, score qualité historique, charge GPU, température GPU.
+          >
+          > | Domaine | Nœuds principaux |
+          > |---------|-----------------|
+          > | `code_generation` | M1, GEMINI, M2 |
+          > | `reasoning` | M1, M2, OL1 |
+          > | `trading_signal` | OL1, M1, GEMINI |
+          > | `vision` | GEMINI |
+          > | `consensus` | M1, M2, OL1, M3, GEMINI, CLAUDE |
+          > | `web_research` | GEMINI, OL1, M1 |
+          >
+          > ---
+          >
+          > ## Installation FR
+          >
+          > ### Prérequis
+          > - Linux (testé sur Ubuntu/Arch)
+          > - Docker + Docker Compose
+          > - Drivers NVIDIA + NVIDIA Container Toolkit
+          > - Python 3.11+
+          > - Au moins 1 GPU NVIDIA
+          >
+          > ### Démarrage rapide
+          >
+          > ```bash
+          > git clone https://github.com/Turbo31150/JARVIS-CLUSTER.git
+          > cd JARVIS-CLUSTER
+          >
+          > # Installation complète
+          > bash projects/linux/install.sh
+          >
+          > # Déploiement Docker
+          > cd projects/linux
+          > docker compose up -d
+          >
+          > # Vérifier le statut
+          > docker compose ps
+          > ```
+          >
+          > ---
+          >
+          > ## Commandes jarvis-ctl
+          >
+          > ```bash
+          > bash projects/linux/jarvis-ctl.sh start    # Démarrer tous les services
+          > bash projects/linux/jarvis-ctl.sh stop     # Arrêter tous les services
+          > bash projects/linux/jarvis-ctl.sh restart  # Redémarrer
+          > bash projects/linux/jarvis-ctl.sh status   # État du cluster
+          > bash projects/linux/jarvis-ctl.sh logs     # Voir les logs
+          > bash projects/linux/jarvis-ctl.sh health   # Health check complet
+          > ```
+          >
+          > ---
+          >
+          > ## Monitoring thermique GPU
+          >
+          > | Température | Statut | Action |
+          > |-------------|--------|--------|
+          > | < 75°C | Normal | Fonctionnement standard |
+          > | 75-85°C | Warning | Alerte, réduction de charge |
+          > | > 85°C | Critique | Re-routage automatique vers nœud plus froid |
+          >
+          > ---
+          >
+          > ## Dépannage
+          >
+          > | Symptôme | Solution |
+          > |----------|----------|
+          > | Nœud ne répond pas | `curl -s http://<addr>:<port>/health` + vérifier circuit breaker |
+          > | GPU trop chaud | `nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader` |
+          > | Container ne démarre pas | `docker compose logs <container>` |
+          > | Pipeline bloqué | `bash jarvis-ctl.sh restart` |
+          > | OL1 hors ligne | `ollama serve` |
+          >
+          > ---
+          >
+          > ## Repos liés
+          >
+          > | Repo | Description |
+          > |------|-------------|
+          > | [jarvis-linux](https://github.com/Turbo31150/jarvis-linux) | Repo principal — déploiement OS complet |
+          > | [turbo](https://github.com/Turbo31150/turbo) | JARVIS Etoile v12.4 — 602 MCP handlers |
+          > | [jarvis-cowork](https://github.com/Turbo31150/jarvis-cowork) | 249 scripts de développement autonome |
+          >
+          > ---
+          >
+          > *Auteur : Turbo31150 | Plateforme : Linux x86_64 | Architecture : IA Multi-GPU Distribuée | Mars 2026*
