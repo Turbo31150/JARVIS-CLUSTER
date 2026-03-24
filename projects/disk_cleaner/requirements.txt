@@ -1,2 +1,0 @@
-# Disk Cleaner - Dependencies
-tqdm>=4.66.0
