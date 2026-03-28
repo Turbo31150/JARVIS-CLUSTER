@@ -543,6 +543,33 @@ Ce depot est un projet personnel. Aucune licence open source n'est accordee.
 
 ---
 
+
+
+---
+
+## What is La Creatrice?
+
+**La Creatrice** is the name of the home-built GPU cluster at the heart of JARVIS. It is a multi-machine setup running **21 AI models** across **3 physical machines**, with a total of **46 GB VRAM** capable of running multiple LLMs simultaneously with automatic failover.
+
+The cluster was designed from scratch with consumer-grade hardware -- no cloud, no rented GPUs. It handles everything from fast inference (gemma-3-4b at 0.4s response time) to deep reasoning (deepseek-r1) to code generation (deepseek-coder), all orchestrated by the 9-stage dispatch pipeline described above.
+
+**Why "La Creatrice"?** Because this machine creates -- it generates code, writes documentation, analyzes markets, composes responses, and orchestrates 600+ agents. It is not just a server; it is the creative engine of the entire JARVIS ecosystem.
+
+## Cost Comparison
+
+| | Cloud GPU (A100 80GB) | La Creatrice (Home Cluster) |
+|---|---|---|
+| **Hardware** | Rented | Owned (RTX 3080 + RTX 2060 + 3x GTX 1660S) |
+| **VRAM** | 80 GB | 46 GB (across 6 GPUs) |
+| **Monthly cost** | ~2.50 EUR/h = **~1,800 EUR/month** (24/7) | **~30 EUR/month** (electricity only) |
+| **Initial investment** | 0 EUR | ~800 EUR (used GPUs + hardware) |
+| **Break-even** | Never -- recurring cost | **< 3 months** |
+| **Data privacy** | Data leaves your network | **100% local** -- nothing leaves the house |
+| **Availability** | Subject to provider quotas | **Always available** -- your hardware, your rules |
+| **Annual cost** | **~21,600 EUR** | **~360 EUR** |
+
+> **ROI: 3 months.** After that, every month of running La Creatrice saves ~1,770 EUR compared to cloud GPU rental.
+
 ## License
 
 MIT License — Free for personal and commercial use.
