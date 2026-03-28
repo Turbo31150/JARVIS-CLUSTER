@@ -26,6 +26,28 @@
 
 ---
 
+
+
+## Cluster Architecture
+
+```mermaid
+graph TB
+    subgraph M1[M1 Master — 6 GPUs]
+        RTX3080[RTX 3080 10GB]
+        RTX2060[RTX 2060 12GB]
+        GTX1660[4x GTX 1660S 24GB]
+    end
+    subgraph M2[M2 Detector]
+        M2GPU[3 GPUs 24GB]
+    end
+    subgraph M3[M3 Orchestrator]
+        M3GPU[Remote LMStudio]
+    end
+    M1 <-->|Sync| M2
+    M1 <-->|Sync| M3
+    M2 <-->|Failover| M3
+```
+
 ## Table des matieres
 
 - [Presentation](#presentation)
