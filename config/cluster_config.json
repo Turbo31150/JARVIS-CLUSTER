@@ -1,0 +1,112 @@
+{
+  "cluster": {
+    "name": "JARVIS-TRADING-CLUSTER",
+    "version": "2.0.0",
+    "master": "M1",
+    "consensus_threshold": 0.70
+  },
+  "nodes": {
+    "M1": {
+      "role": "master",
+      "hostname": "M1-MASTER",
+      "ip": "192.168.1.85",
+      "api_port": 8765,
+      "ws_port": 8766,
+      "capabilities": ["orchestration", "decision", "monitoring"],
+      "priority": 1
+    },
+    "M2": {
+      "role": "worker",
+      "hostname": "WIN-TBOT",
+      "ip": "192.168.1.26",
+      "api_port": 8765,
+      "ws_port": 8766,
+      "capabilities": ["trading", "mcp", "lm-studio", "n8n", "telegram", "mexc", "multi-ia", "gpu", "shell", "file-access", "process-mgmt"],
+      "priority": 2
+    },
+    "M3": {
+      "role": "worker",
+      "hostname": "M3",
+      "ip": "192.168.1.113",
+      "api_port": 1234,
+      "capabilities": ["lm-studio"],
+      "priority": 3
+    }
+  },
+  "models": {
+    "deepseek-r1": {
+      "type": "local",
+      "endpoint": "http://127.0.0.1:1234",
+      "weight": 0.30,
+      "specialty": "reasoning",
+      "node": "M2"
+    },
+    "qwen3-8b": {
+      "type": "remote",
+      "endpoint": "http://192.168.1.85:1234",
+      "weight": 0.25,
+      "specialty": "technical",
+      "node": "M1"
+    },
+    "perplexity": {
+      "type": "cloud",
+      "endpoint": "https://api.perplexity.ai",
+      "weight": 0.20,
+      "specialty": "sentiment",
+      "api_key_env": "PERPLEXITY_API_KEY"
+    },
+    "claude": {
+      "type": "cloud",
+      "endpoint": "https://api.anthropic.com",
+      "weight": 0.25,
+      "specialty": "strategy",
+      "api_key_env": "ANTHROPIC_API_KEY"
+    },
+    "gemini": {
+      "type": "cloud",
+      "endpoint": "gemini-cli",
+      "weight": 0.15,
+      "specialty": "vision"
+    },
+    "nemotron": {
+      "type": "local",
+      "endpoint": "http://127.0.0.1:1234",
+      "weight": 0.10,
+      "specialty": "fast",
+      "node": "M2"
+    }
+  },
+  "mcp_servers": {
+    "trading-ai-ultimate": {
+      "node": "M2",
+      "path": "C:\\Users\\Turbo\\turbo\\src\\mcp_server.py",
+      "tools": ["scan_mexc", "get_positions", "check_margins", "consensus", "send_telegram"]
+    }
+  },
+  "n8n": {
+    "host": "127.0.0.1",
+    "port": 5678,
+    "api_key_env": "N8N_API_KEY",
+    "workflows": {
+      "trading_ultimate": "4ovJaOxtAzITyJEd",
+      "multi_ia": "lJEz0hbG66DceXYA",
+      "ancrage": "jGlSm9FWTYb7OKZF",
+      "scanner": "kyoMdBQLuk67mFhs"
+    }
+  },
+  "telegram": {
+    "bot_token_env": "TELEGRAM_BOT_TOKEN",
+    "chat_id": "2010747443"
+  },
+  "mexc": {
+    "api_url": "https://contract.mexc.com/api/v1",
+    "api_key_env": "MEXC_API_KEY",
+    "secret_key_env": "MEXC_SECRET_KEY"
+  },
+  "monitoring": {
+    "heartbeat_interval": 30,
+    "health_check_interval": 60,
+    "log_level": "INFO",
+    "metrics_port": 9090
+  }
+}
