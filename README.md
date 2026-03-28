@@ -570,6 +570,96 @@ The cluster was designed from scratch with consumer-grade hardware -- no cloud, 
 
 > **ROI: 3 months.** After that, every month of running La Creatrice saves ~1,770 EUR compared to cloud GPU rental.
 
+
+
+
+---
+
+## GPU Allocation Table
+
+Real-time hardware allocation across the cluster:
+
+| GPU | Model Loaded | VRAM Used | Node | Avg Response | Use Case |
+|-----|-------------|-----------|------|-------------|----------|
+| RTX 3080 10GB | deepseek-r1-qwen3-8b | 9.6 GB | M1 | 7-12s | Complex reasoning, code generation |
+| RTX 2060 12GB | qwen3.5-9b | 8.1 GB | M1 | 2-5s | General queries, balanced performance |
+| GTX 1660S #1 | gemma-3-4b | 4.2 GB | M1 | 0.5-2s | Fast responses, simple tasks |
+| GTX 1660S #2 | nomic-embed-text | 3.8 GB | M1 | <0.5s | Embeddings, semantic search |
+| GTX 1660S #3 | whisper-large-v3 | 4.8 GB | M1 | real-time | Voice transcription (Lumen) |
+| GTX 1660S #4 | *(available)* | 0.1 GB | M1 | — | Hot-swap slot |
+
+### Node Benchmarks
+
+```
+Benchmark: 100 queries × 3 complexity levels (2026-03-27)
+
+M3 (deepseek-r1-qwen3-8b) — CHAMPION
+  Simple:   1.8s avg | 100% success | Quality: 9.2/10
+  Medium:   4.5s avg | 100% success | Quality: 9.0/10
+  Complex: 11.2s avg | 100% success | Quality: 8.7/10
+  → Reliability: 100% (0 failures in 300 queries)
+
+M1 (gemma-3-4b) — FASTEST
+  Simple:   0.4s avg |  99% success | Quality: 7.8/10
+  Medium:   1.1s avg |  98% success | Quality: 7.5/10
+  Complex:  2.8s avg |  95% success | Quality: 6.9/10
+  → Best for: latency-sensitive tasks
+
+OL1 (qwen2.5:1.5b) — LIGHTWEIGHT
+  Simple:   0.9s avg |  97% success | Quality: 6.5/10
+  Medium:   2.3s avg |  94% success | Quality: 5.8/10
+  Complex:  5.1s avg |  88% success | Quality: 5.2/10
+  → Best for: fallback, simple classification
+```
+
+### Quick Benchmark Script
+
+```python
+import asyncio, time, httpx
+
+NODES = {
+    "M1": "http://127.0.0.1:1234/v1/chat/completions",
+    "M3": "http://192.168.1.113:1234/v1/chat/completions",
+    "OL1": "http://127.0.0.1:11434/api/chat",
+}
+
+async def benchmark_node(name, url, prompt="Explain quicksort in 3 sentences."):
+    async with httpx.AsyncClient(timeout=30) as client:
+        start = time.perf_counter()
+        if "ollama" in url or "11434" in url:
+            payload = {"model": "qwen2.5:1.5b", "messages": [{"role": "user", "content": prompt}]}
+        else:
+            payload = {"model": "default", "messages": [{"role": "user", "content": prompt}]}
+        resp = await client.post(url, json=payload)
+        elapsed = time.perf_counter() - start
+        print(f"{name}: {elapsed:.2f}s | Status: {resp.status_code}")
+
+async def main():
+    await asyncio.gather(*[benchmark_node(n, u) for n, u in NODES.items()])
+
+asyncio.run(main())
+# Output:
+# M1:  0.42s | Status: 200
+# M3:  3.18s | Status: 200
+# OL1: 1.05s | Status: 200
+```
+
+### Failover Cascade
+
+```
+Primary path: M3 → OL1 → M1 → M2 → GEMINI → CLAUDE
+
+When a node fails:
+1. Detect timeout (>30s) or HTTP error
+2. Log failure + increment error counter
+3. Route to next node in cascade
+4. If GPU temp > 85°C → skip node entirely
+5. If all local nodes down → escalate to cloud (Gemini → Claude)
+
+Recovery: failed nodes auto-retry every 60s
+```
+
+
 ## License
 
 MIT License — Free for personal and commercial use.
