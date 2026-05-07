@@ -17,7 +17,7 @@
   <img src="https://img.shields.io/badge/Noeuds-4-orange?style=for-the-badge&logo=serverless&logoColor=white" />
   <img src="https://img.shields.io/badge/Containers-10-blueviolet?style=for-the-badge&logo=docker&logoColor=white" />
   <img src="https://img.shields.io/badge/Pipeline-9_etapes-red?style=for-the-badge&logo=fastapi&logoColor=white" />
-  <img src="https://img.shields.io/badge/Licence-Privee-lightgrey?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/License-MIT-00ffd1?style=for-the-badge&logo=opensourceinitiative&logoColor=white" />
 </p>
 
 <p align="center">
@@ -529,9 +529,9 @@ curl -s http://127.0.0.1:11434/api/tags
 
 ## Licence
 
-**Projet prive** — Tous droits reserves.
+**MIT License** — Free for personal and commercial use.
 
-Ce depot est un projet personnel. Aucune licence open source n'est accordee.
+See [LICENSE](LICENSE) for full text.
 
 ---
 
@@ -553,7 +553,7 @@ Ce depot est un projet personnel. Aucune licence open source n'est accordee.
 
 The cluster was designed from scratch with consumer-grade hardware -- no cloud, no rented GPUs. It handles everything from fast inference (gemma-3-4b at 0.4s response time) to deep reasoning (deepseek-r1) to code generation (deepseek-coder), all orchestrated by the 9-stage dispatch pipeline described above.
 
-**Why "La Creatrice"?** Because this machine creates -- it generates code, writes documentation, analyzes markets, composes responses, and orchestrates 600+ agents. It is not just a server; it is the creative engine of the entire JARVIS ecosystem.
+**Why "La Creatrice"?** Because this machine creates -- it generates code, writes documentation, analyzes markets, composes responses, and orchestrates 928 agents. It is not just a server; it is the creative engine of the entire JARVIS ecosystem.
 
 ## Cost Comparison
 
@@ -667,6 +667,29 @@ MIT License — Free for personal and commercial use.
 ## Author
 
 **Franck Delmas** — AI Systems Architect
-- [GitHub](https://github.com/Turbo31150) · [Portfolio](https://turbo31150.github.io/franckdelmas.dev/) · [LinkedIn](https://linkedin.com/in/franck-hlb-80bb231b1) · [Codeur](https://codeur.com/-6666zlkh)
+- [GitHub](https://github.com/Turbo31150) · [Portfolio](https://turbo31150.github.io/franckdelmas.dev/) · [LinkedIn](https://linkedin.com/in/franck-hlb-80bb231b1)
 
 Part of [JARVIS OS](https://github.com/Turbo31150/jarvis-linux) ecosystem.
+
+
+---
+
+<!-- jarvis-author-footer-v1 -->
+
+<div align="center">
+
+### Author
+
+**Franck Delmas** — AI Systems Architect · JARVIS OS Creator · Toulouse, France
+
+[![Portfolio](https://img.shields.io/badge/Portfolio-franckdelmas.dev-00ffd1?style=flat-square)](https://franckdelmas.dev)
+[![GitHub](https://img.shields.io/badge/GitHub-Turbo31150-181717?style=flat-square&logo=github)](https://github.com/Turbo31150)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-franck--hlb-0077B5?style=flat-square&logo=linkedin)](https://www.linkedin.com/in/franck-hlb-80bb231b1/)
+[![Hire](https://img.shields.io/badge/Status-Open%20to%20work-00ffd1?style=flat-square)](https://github.com/Turbo31150)
+
+*Production-first autodidact · Multi-agent · MCP early adopter · Available for CDI / freelance / consulting.*
+
+Part of the [JARVIS OS](https://github.com/Turbo31150/jarvis-linux) ecosystem ·
+[All 44 public repos](https://github.com/Turbo31150?tab=repositories)
+
+</div>
